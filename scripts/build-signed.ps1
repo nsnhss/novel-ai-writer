@@ -1,0 +1,40 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    使用本地 updater 签名密钥构建 Tauri 生产包。
+.DESCRIPTION
+    读取项目根目录下的 .tauri 私钥文件进行 updater 包签名。
+    若还没有密钥，请先运行：
+        npm run tauri -- signer generate --write-keys .tauri
+n#>
+$ErrorActionPreference = "Stop"
+
+$projectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -LiteralPath $projectRoot
+
+if (-not (Test-Path "$projectRoot\.tauri")) {
+    throw "找不到 .tauri 私钥文件。请先生成签名密钥：npm run tauri -- signer generate --write-keys .tauri"
+}
+
+# Load local environment variables (secrets) from .env if present
+$envFile = "$projectRoot\.env"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([^#\s=]+)\s*=\s*(.*?)\s*$') {
+            [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+        }
+    }
+}
+
+# Prefer inline private key string; fallback to path
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+    if (Test-Path "$projectRoot\.tauri") {
+        $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$projectRoot\.tauri" -Raw
+    }
+    else {
+        throw "找不到 .tauri 私钥文件。请先生成签名密钥：npm run tauri -- signer generate --write-keys .tauri"
+    }
+}
+
+Write-Host "Building Tauri bundles with updater signing..." -ForegroundColor Cyan
+npm run tauri -- build

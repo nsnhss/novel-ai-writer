@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+:root {
+  --radius: 0.5rem;
+}
+
+:root[data-theme="dark"] {
+  --background: #0f0f10;
+  --foreground: #f2f2f2;
+  --sidebar: #18181a;
+  --sidebar-border: #27272a;
+  --panel: #18181a;
+  --panel-border: #27272a;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --primary: #e4e4e7;
+  --primary-foreground: #18181b;
+  --ring: #d4d4d8;
+}
+
+:root[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #18181b;
+  --sidebar: #f8f8f8;
+  --sidebar-border: #e4e4e7;
+  --panel: #f8f8f8;
+  --panel-border: #e4e4e7;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --ring: #a1a1aa;
+}
+
+* {
+  border-color: var(--sidebar-border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* CodeMirror editor custom styles */
+.cm-editor {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.cm-editor .cm-content {
+  color: var(--foreground);
+}
+
+.cm-editor .cm-line {
+  padding: 0 2px;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  opacity: 1;
+}
+
+/* Resizer */
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.resizer:hover {
+  background: var(--ring);
+}

@@ -1,0 +1,156 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+            target: windows-x86_64
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            target: darwin-aarch64
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            target: darwin-x86_64
+          - platform: ubuntu-22.04
+            args: ""
+            target: linux-x86_64
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Windows code signing (EV/OV certificate as base64 PFX)
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          # macOS code signing & notarization
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "novel-ai-writer ${{ github.ref_name }}"
+          releaseBody: "See the assets to download and install this version."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # After all platform builds are uploaded, generate the updater manifest (latest.json).
+  publish-updater-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download release assets
+        id: download
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ github.ref_name }}" --dir ./release-assets \
+            --pattern "*.msi" --pattern "*.exe" --pattern "*.dmg" \
+            --pattern "*.AppImage" --pattern "*.deb" --pattern "*.rpm" \
+            --pattern "*.app.tar.gz" --pattern "*.sig" --clobber
+
+      - name: Generate latest.json
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_NOTES: "Release ${{ github.ref_name }}"
+        run: |
+          $ErrorActionPreference = "Stop"
+          $assets = Get-ChildItem ./release-assets
+          $platforms = @{}
+
+          # Map Tauri updater target names to (archive pattern, signature suffix)
+          $targetMap = @{
+            "windows-x86_64" = @("*x64-setup.exe", ".exe.sig")
+            "darwin-x86_64"  = @("*_x64.app.tar.gz", ".sig")
+            "darwin-aarch64" = @("*_aarch64.app.tar.gz", ".sig")
+            "linux-x86_64"   = @("*_amd64.AppImage", ".AppImage.sig")
+          }
+
+          foreach ($entry in $targetMap.GetEnumerator()) {
+            $target = $entry.Key
+            $pattern = $entry.Value[0]
+            $sigSuffix = $entry.Value[1]
+            $archive = $assets | Where-Object { $_.Name -like $pattern } | Select-Object -First 1
+            if ($archive) {
+              $sigName = $archive.Name + $sigSuffix
+              $sigFile = $assets | Where-Object { $_.Name -eq $sigName } | Select-Object -First 1
+              $signature = if ($sigFile) { (Get-Content $sigFile.FullName -Raw).Trim() } else { "" }
+              $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${archive.Name}"
+              $platforms[$target] = @{
+                signature = $signature
+                url       = $url
+              }
+            }
+          }
+
+          $manifest = @{
+            version = $env:RELEASE_TAG.TrimStart("v")
+            notes   = $env:RELEASE_NOTES
+            pub_date = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+            platforms = $platforms
+          }
+
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 ./release-assets/latest.json
+          Get-Content ./release-assets/latest.json
+
+      - name: Upload latest.json to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" ./release-assets/latest.json --clobber
