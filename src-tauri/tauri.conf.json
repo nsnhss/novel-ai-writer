@@ -79,7 +79,7 @@
     "updater": {
       "active": true,
       "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVDMTFCNzIxQzAxM0UzQzcKUldUSDR4UEFJYmNSWEt3SGNRUzdmUlozTFlmYTF5Ym1HNG1ESFpUSTVVcGt2aUpRTGphZnVUdzcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEzQTNCMEZERENDQTcxODcKUldTSGNjcmMvYkNqRS9KQk1iN2pDSW9Qd1lsOXVubUVnM1dmK2IyMVFsM25sTGdaRmU3Q0swZmoK",
       "endpoints": [
         "https://github.com/nsnhss/novel-ai-writer/releases/latest/download/latest.json"
       ],

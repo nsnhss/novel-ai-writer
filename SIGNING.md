@@ -113,7 +113,7 @@ APPIMAGE_SIGN_PASSPHRASE=<GPG 私钥密码>
 
 ```json
 "endpoints": [
-  "https://github.com/YOUR_USERNAME/novel-ai-writer/releases/latest/download/latest.json"
+  "https://github.com/nsnhss/novel-ai-writer/releases/latest/download/latest.json"
 ]
 ```
 
