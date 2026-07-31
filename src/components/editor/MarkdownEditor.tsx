@@ -4,7 +4,7 @@ import { EditorState, Compartment, EditorSelection } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { defaultKeymap, history, historyKeymap, undo, redo } from "@codemirror/commands";
 import { search, searchKeymap, openSearchPanel } from "@codemirror/search";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, BookOpen } from "lucide-react";
 import { useBookStore } from "@/stores/bookStore";
 import { usePrivacyStore } from "@/stores/privacyStore";
 import { useGenerationStore } from "@/stores/generationStore";
@@ -68,6 +68,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const currentDocNode = useBookStore((s) => s.currentDocNode);
     const bookError = useBookStore((s) => s.error);
     const clearError = useBookStore((s) => s.clearError);
+    const booksLoading = useBookStore((s) => s.isLoading);
     const { enabled: privacyEnabled, rules: privacyRules, loadRules, loadMode } = usePrivacyStore();
     const pendingRange = useGenerationStore((state) => state.pendingRange);
     const setPendingRange = useGenerationStore((state) => state.setPendingRange);
@@ -260,8 +261,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             highlightCompartment.of(EditorView.decorations.of(Decoration.set([]))),
             EditorView.theme({
               ".cm-generation-pending": {
-                backgroundColor: "rgba(59, 130, 246, 0.10)",
-                borderBottom: "2px solid rgba(59, 130, 246, 0.35)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                borderBottom: "2px solid color-mix(in srgb, var(--accent) 45%, transparent)",
               },
             }),
             EditorView.updateListener.of((update) => {
@@ -474,7 +475,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         onMouseMove={handleContainerMouseMove}
         onMouseLeave={handleContainerMouseLeave}
       >
-        <div className="mx-auto h-full max-w-3xl">
+        {/* 栏宽由 --editor-max-width 控制（设置-外观），不再固定 max-w-3xl */}
+        <div className="h-full w-full">
           <div ref={containerRef} className="h-full w-full" />
         </div>
         {toolbarVisible && toolbarCoords && (
@@ -496,10 +498,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                 <p className="text-xs text-muted-foreground mb-4 max-h-32 overflow-auto">{bookError}</p>
                 <button onClick={clearError} className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:opacity-90">重试</button>
               </div>
-            ) : (
+            ) : booksLoading ? (
               <div className="text-center text-muted-foreground">
                 <Loader2 size={24} className="mx-auto mb-2 animate-spin" />
                 正在加载章节…
+              </div>
+            ) : (
+              /* 无章节空态：引导而非永久转圈 */
+              <div className="text-center text-muted-foreground">
+                <BookOpen size={36} className="mx-auto mb-3 opacity-60" />
+                <p className="text-sm">从左侧选择一章，或新建章节开始写作</p>
               </div>
             )}
           </div>

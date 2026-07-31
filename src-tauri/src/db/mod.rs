@@ -370,3 +370,26 @@ pub fn get_app_config_bool(conn: &Connection, key: &str) -> Option<bool> {
 pub fn get_app_config_i32(conn: &Connection, key: &str) -> Option<i32> {
     get_app_config(conn, key).ok().flatten().and_then(|v| v.parse().ok())
 }
+
+/// 测试基建: 用内存 SQLite 初始化全局 DB（整个测试进程只初始化一次）。
+/// 各测试应使用 UUID 生成主键，避免并行测试之间数据互相干扰。
+#[cfg(test)]
+pub(crate) fn init_test_db() -> Result<(), crate::error::AppError> {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    let mut result = Ok(());
+    INIT.call_once(|| {
+        let init = (|| -> Result<(), crate::error::AppError> {
+            let conn = Connection::open_in_memory()?;
+            run_migrations(&conn)?;
+            conn.pragma_update(None, "foreign_keys", "ON")?;
+            DB.set(Mutex::new(conn)).map_err(|_| {
+                crate::error::AppError::Other("数据库已经初始化".to_string())
+            })?;
+            Ok(())
+        })();
+        if let Err(e) = init {
+            result = Err(e);
+        }
+    });
+    result
+}

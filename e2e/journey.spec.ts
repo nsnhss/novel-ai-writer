@@ -6,14 +6,11 @@ test.describe("核心用户旅程", () => {
     const bookTitle = `测试书_${Date.now()}`;
     const sampleText = "这是一个测试段落，用于验证创建、保存和重启后的数据持久化。";
 
-    // 1. 打开作品下拉菜单并新建作品
+    // 1. 打开作品下拉菜单并新建作品（应用内 PromptDialog，直接填输入框）
     await tauriPage.getByRole("button", { name: /作品|book/i }).first().click();
-
-    // 2. mock window.prompt 以绕过 WebView2 原生对话框在自动化中的限制
-    await tauriPage.evaluate((title: string) => {
-      window.prompt = () => title;
-    }, bookTitle);
-    await tauriPage.getByRole("button", { name: "新建作品" }).click();
+    await tauriPage.getByRole("menuitem", { name: "新建作品" }).click();
+    await tauriPage.getByRole("dialog").locator("input").fill(bookTitle);
+    await tauriPage.getByRole("button", { name: /^(创建|确定)$/ }).click();
 
     // 3. 等待章节加载（默认创建第一卷第一章）
     await expect(tauriPage.getByText(/第 1 卷|新章节|第一章/).first()).toBeVisible({ timeout: 10_000 });
@@ -52,10 +49,9 @@ test.describe("核心用户旅程", () => {
     try {
       const page = app.page;
       await page.getByRole("button", { name: /作品|book/i }).first().click();
-      await page.evaluate((title: string) => {
-        window.prompt = () => title;
-      }, bookTitle);
-      await page.getByRole("button", { name: "新建作品" }).click();
+      await page.getByRole("menuitem", { name: "新建作品" }).click();
+      await page.getByRole("dialog").locator("input").fill(bookTitle);
+      await page.getByRole("button", { name: /^(创建|确定)$/ }).click();
 
       await expect(page.getByText(/第 1 卷|新章节|第一章/).first()).toBeVisible({ timeout: 10_000 });
       const chapterButton = page.getByRole("button", { name: /新章节|第一章/ }).first();
@@ -89,7 +85,7 @@ test.describe("核心用户旅程", () => {
 
       if (!restored) {
         await page.getByRole("button", { name: /作品|重启测试书|book/i }).first().click();
-        await page.getByText(bookTitle, { exact: true }).first().click();
+        await page.getByRole("menuitem", { name: bookTitle, exact: true }).click();
         await expect(page.getByText(/第 1 卷|新章节|第一章/).first()).toBeVisible({ timeout: 10_000 });
         const chapterButton = page.getByText(/新章节|第一章/).first();
         if (await chapterButton.isVisible().catch(() => false)) {

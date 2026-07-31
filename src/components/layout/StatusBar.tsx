@@ -1,10 +1,9 @@
-import { Loader2, Check, Circle, Eye, EyeOff } from "lucide-react";
+import { Loader2, Check, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useBookStore } from "@/stores/bookStore";
 import { useModelStore } from "@/stores/modelStore";
-import { usePrivacyStore } from "@/stores/privacyStore";
 import { useGenerationStore } from "@/stores/generationStore";
 
 interface StatusBarProps {
@@ -18,9 +17,6 @@ export function StatusBar({ isSaving, hasUnsavedChanges, wordCount: propWordCoun
   const { currentModel, ollamaAvailable, checkOllamaStatus } = useModelStore(
     useShallow((s) => ({ currentModel: s.currentModel, ollamaAvailable: s.ollamaAvailable, checkOllamaStatus: s.checkOllamaStatus }))
   );
-  const { enabled: privacyEnabled, loadMode, toggleEnabled } = usePrivacyStore(
-    useShallow((s) => ({ enabled: s.enabled, loadMode: s.loadMode, toggleEnabled: s.toggleEnabled }))
-  );
   const { latencyMs, tokensPerSec, genError } = useGenerationStore(
     useShallow((s) => ({ latencyMs: s.latencyMs, tokensPerSec: s.tokensPerSec, genError: s.error }))
   );
@@ -29,11 +25,10 @@ export function StatusBar({ isSaving, hasUnsavedChanges, wordCount: propWordCoun
   const prevHasUnsavedRef = useRef(hasUnsavedChanges);
 
   useEffect(() => {
-    loadMode();
     checkOllamaStatus();
     const timer = setInterval(() => checkOllamaStatus(), 30000);
     return () => clearInterval(timer);
-  }, [loadMode, checkOllamaStatus]);
+  }, [checkOllamaStatus]);
 
   useEffect(() => {
     const wasSaving = prevIsSavingRef.current;
@@ -79,14 +74,6 @@ export function StatusBar({ isSaving, hasUnsavedChanges, wordCount: propWordCoun
             生成失败: {genError}
           </span>
         )}
-        <button
-          onClick={toggleEnabled}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-muted"
-          title={privacyEnabled ? "关闭隐私脱敏" : "开启隐私脱敏"}
-        >
-          {privacyEnabled ? <EyeOff size={12} className="text-primary" /> : <Eye size={12} />}
-          <span className={privacyEnabled ? "text-primary" : ""}>{privacyEnabled ? "脱敏中" : "脱敏"}</span>
-        </button>
       </div>
       <div className="flex items-center gap-3">
         <span>{wordCount} 字</span>

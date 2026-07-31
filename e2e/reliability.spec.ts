@@ -6,10 +6,10 @@ import fs from "fs";
 /** 创建一本新书并等待编辑器就绪；triggerName 为左上角书籍菜单触发按钮的名称（无书时显示“作品”，有书时显示当前书名） */
 async function createBookAndOpenEditor(page: Page, title: string, triggerName: string | RegExp = /作品|book/i) {
   await page.getByRole("button", { name: triggerName }).first().click();
-  await page.evaluate((t: string) => {
-    window.prompt = () => t;
-  }, title);
-  await page.getByRole("button", { name: "新建作品" }).click();
+  // 新建对话框为应用内 PromptDialog（替代原 window.prompt），直接填输入框后确认
+  await page.getByRole("menuitem", { name: "新建作品" }).click();
+  await page.getByRole("dialog").locator("input").fill(title);
+  await page.getByRole("button", { name: /^(创建|确定)$/ }).click();
   await expect(page.getByText(/第 1 卷|新章节|第一章/).first()).toBeVisible({ timeout: 10_000 });
   const editor = page.locator(".cm-content");
   await expect(editor).toBeVisible({ timeout: 10_000 });

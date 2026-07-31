@@ -6,12 +6,11 @@ test.describe("AI 续写链路（mock Ollama）", () => {
     const bookTitle = `AI测试书_${Date.now()}`;
     const seedText = "他走出客栈，天边刚泛起鱼肚白。";
 
-    // 1. 创建书籍
+    // 1. 创建书籍（新建对话框为应用内 PromptDialog，直接填输入框）
     await page.getByRole("button", { name: /作品|book/i }).first().click();
-    await page.evaluate((title: string) => {
-      window.prompt = () => title;
-    }, bookTitle);
-    await page.getByRole("button", { name: "新建作品" }).click();
+    await page.getByRole("menuitem", { name: "新建作品" }).click();
+    await page.getByRole("dialog").locator("input").fill(bookTitle);
+    await page.getByRole("button", { name: /^(创建|确定)$/ }).click();
     await expect(page.getByText(/第 1 卷|新章节|第一章/).first()).toBeVisible({ timeout: 10_000 });
 
     // 2. 输入开头文本

@@ -67,6 +67,9 @@ interface BookState {
   createChapter: (volumeId: string, title: string) => Promise<Chapter>;
   deleteVolume: (volumeId: string) => Promise<void>;
   deleteChapter: (chapterId: string) => Promise<void>;
+  renameChapter: (chapterId: string, title: string) => Promise<void>;
+  renameVolume: (volumeId: string, title: string) => Promise<void>;
+  renameBook: (bookId: string, title: string) => Promise<void>;
   moveVolume: (bookId: string, volumeId: string, direction: "up" | "down") => Promise<void>;
   moveChapter: (volumeId: string, chapterId: string, direction: "up" | "down") => Promise<void>;
   loadBookTree: (bookId: string) => Promise<void>;
@@ -214,6 +217,44 @@ export const useBookStore = create<BookState>((set, get) => ({
       if (bookId) await get().loadBookTree(bookId);
     } catch (err) {
       set({ error: `删除章节失败: ${String(err)}` });
+      throw err;
+    }
+  },
+
+  renameChapter: async (chapterId, title) => {
+    set({ error: null });
+    try {
+      // update_chapter 已支持仅传 title（content/plainText 传 undefined 表示不修改正文）
+      await invoke("update_chapter", { req: { id: chapterId, title } });
+      const bookId = get().currentBookId;
+      if (bookId) await get().loadBookTree(bookId);
+    } catch (err) {
+      set({ error: `重命名章节失败: ${String(err)}` });
+      throw err;
+    }
+  },
+
+  renameVolume: async (volumeId, title) => {
+    set({ error: null });
+    try {
+      await invoke("rename_volume", { volumeId, title });
+      const bookId = get().currentBookId;
+      if (bookId) await get().loadBookTree(bookId);
+    } catch (err) {
+      set({ error: `重命名卷失败: ${String(err)}` });
+      throw err;
+    }
+  },
+
+  renameBook: async (bookId, title) => {
+    set({ error: null });
+    try {
+      await invoke("rename_book", { bookId, title });
+      // loadBooks 副作用较多（可能重建作品/切章），这里只重新拉列表并原地更新，保持 currentBookId 不变
+      const books = await invoke<Book[]>("list_books");
+      set({ books });
+    } catch (err) {
+      set({ error: `重命名作品失败: ${String(err)}` });
       throw err;
     }
   },

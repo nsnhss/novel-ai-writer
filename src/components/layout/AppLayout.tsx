@@ -1,17 +1,19 @@
 import { useRef, useEffect, useState } from "react";
-import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useShallow } from "zustand/react/shallow";
 import { useUIStore } from "@/stores/uiStore";
-import { useBookStore } from "@/stores/bookStore";
 import { SidebarLeft } from "./SidebarLeft";
 import { SidebarRight } from "./SidebarRight";
 import { StatusBar } from "./StatusBar";
+import { TitleBar } from "./TitleBar";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
+import { SettingsPage } from "@/components/settings/SettingsPage";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { RewriteDiffDialog } from "@/components/ai/RewriteDiffDialog";
 import { BranchDialog } from "@/components/ai/BranchDialog";
 import { Toaster } from "@/components/common/Toaster";
+import { ConfirmDialogHost } from "@/components/ui/confirm-dialog";
+import { PromptDialogHost } from "@/components/ui/prompt-dialog";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 function Resizer({
   onResize,
@@ -68,89 +70,70 @@ export function AppLayout() {
     rightSidebarCollapsed,
     setLeftSidebarWidth,
     setRightSidebarWidth,
-    toggleLeftSidebar,
-    toggleRightSidebar,
+    settingsOpen,
   } = useUIStore();
 
-  const currentChapterId = useBookStore((s) => s.currentChapterId);
-  const volumes = useBookStore(useShallow((s) => s.volumes));
   const [liveWordCount, setLiveWordCount] = useState(0);
   const [saveState, setSaveState] = useState({ isSaving: false, hasUnsavedChanges: false });
-
-  const currentVolume = volumes.find((v) => v.chapters?.some((c) => c.id === currentChapterId));
-  const currentChapter = currentVolume?.chapters?.find((c) => c.id === currentChapterId);
 
   const wordCount = liveWordCount;
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      {/* Left sidebar */}
-      <div
-        className={cn(
-          "flex-shrink-0 overflow-hidden transition-all duration-200",
-          leftSidebarCollapsed ? "w-0 opacity-0" : "opacity-100"
-        )}
-        style={{ width: leftSidebarCollapsed ? 0 : leftSidebarWidth }}
-      >
-        <SidebarLeft />
-      </div>
-
-      {/* Left resizer / toggle */}
-      <div className="flex h-full flex-col items-center bg-sidebar">
-        {!leftSidebarCollapsed && <Resizer onResize={(dx) => setLeftSidebarWidth(leftSidebarWidth + dx)} />}
-        <button
-          onClick={toggleLeftSidebar}
-          className="mt-2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          title={leftSidebarCollapsed ? "展开目录" : "收起目录"}
+    <TooltipProvider>
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      <TitleBar />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <div
+          className={cn(
+            "flex-shrink-0 overflow-hidden transition-all duration-200",
+            leftSidebarCollapsed ? "w-0 opacity-0" : "opacity-100"
+          )}
+          style={{ width: leftSidebarCollapsed ? 0 : leftSidebarWidth }}
         >
-          <PanelLeft size={16} />
-        </button>
-      </div>
+          <SidebarLeft />
+        </div>
 
-      {/* Main editor */}
-      <div className="flex flex-1 flex-col bg-background">
-        <div className="flex items-center justify-between border-b border-panel-border px-4 py-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="truncate text-sm font-medium">{currentChapter?.title ?? "未选择章节"}</span>
-            {currentVolume && (
-              <span className="truncate text-xs text-muted-foreground">
-                {currentVolume.title}
-              </span>
-            )}
+        {/* Left resizer（折叠按钮已上移至 TitleBar） */}
+        {!leftSidebarCollapsed && (
+          <div className="flex h-full flex-col items-center bg-sidebar">
+            <Resizer onResize={(dx) => setLeftSidebarWidth(leftSidebarWidth + dx)} />
           </div>
-          {/* 字数统一在 StatusBar 显示，此处不再重复 */}
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <MarkdownEditor onSaveStateChange={setSaveState} onWordCountChange={setLiveWordCount} />
-        </div>
-        <StatusBar isSaving={saveState.isSaving} hasUnsavedChanges={saveState.hasUnsavedChanges} wordCount={wordCount} />
-      </div>
-
-      {/* Right resizer / toggle */}
-      <div className="flex h-full flex-col items-center bg-panel">
-        {!rightSidebarCollapsed && <Resizer onResize={(dx) => setRightSidebarWidth(rightSidebarWidth - dx)} />}
-        <button
-          onClick={toggleRightSidebar}
-          className="mt-2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          title={rightSidebarCollapsed ? "展开面板" : "收起面板"}
-        >
-          <PanelRight size={16} />
-        </button>
-      </div>
-
-      {/* Right sidebar */}
-      <div
-        className={cn(
-          "flex-shrink-0 overflow-hidden transition-all duration-200",
-          rightSidebarCollapsed ? "w-0 opacity-0" : "opacity-100"
         )}
-        style={{ width: rightSidebarCollapsed ? 0 : rightSidebarWidth }}
-      >
-        <SidebarRight />
+
+        {/* Main editor（章节标题已进 TitleBar 面包屑，此处不再有头部栏） */}
+        <div className="flex flex-1 flex-col bg-background">
+          <div className="flex-1 overflow-hidden">
+            <MarkdownEditor onSaveStateChange={setSaveState} onWordCountChange={setLiveWordCount} />
+          </div>
+          <StatusBar isSaving={saveState.isSaving} hasUnsavedChanges={saveState.hasUnsavedChanges} wordCount={wordCount} />
+        </div>
+
+        {/* Right resizer（折叠按钮已上移至 TitleBar） */}
+        {!rightSidebarCollapsed && (
+          <div className="flex h-full flex-col items-center bg-panel">
+            <Resizer onResize={(dx) => setRightSidebarWidth(rightSidebarWidth - dx)} />
+          </div>
+        )}
+
+        {/* Right sidebar */}
+        <div
+          className={cn(
+            "flex-shrink-0 overflow-hidden transition-all duration-200",
+            rightSidebarCollapsed ? "w-0 opacity-0" : "opacity-100"
+          )}
+          style={{ width: rightSidebarCollapsed ? 0 : rightSidebarWidth }}
+        >
+          <SidebarRight />
+        </div>
       </div>
       <RewriteDiffDialog />
       <BranchDialog />
       <Toaster />
+      <ConfirmDialogHost />
+      <PromptDialogHost />
+      {settingsOpen && <SettingsPage />}
     </div>
+    </TooltipProvider>
   );
 }

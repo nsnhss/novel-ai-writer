@@ -217,6 +217,44 @@ pub fn delete_chapter(chapterId: String) -> Result<(), AppError> {
     Ok(())
 }
 
+#[allow(non_snake_case)]
+#[tauri::command]
+pub fn rename_volume(volumeId: String, title: String) -> Result<(), AppError> {
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err(AppError::Other("卷标题不能为空".to_string()));
+    }
+    let conn = db::get_db()?;
+    // volume 表没有 updated_at 字段（见 db/schema.rs），只更新 title。
+    let updated = conn.execute(
+        "UPDATE volume SET title = ?1 WHERE id = ?2",
+        params![&title, &volumeId],
+    )?;
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("卷 {} 不存在", volumeId)));
+    }
+    Ok(())
+}
+
+#[allow(non_snake_case)]
+#[tauri::command]
+pub fn rename_book(bookId: String, title: String) -> Result<(), AppError> {
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err(AppError::Other("书名不能为空".to_string()));
+    }
+    let now = Utc::now().to_rfc3339();
+    let conn = db::get_db()?;
+    let updated = conn.execute(
+        "UPDATE book SET title = ?1, updated_at = ?2 WHERE id = ?3",
+        params![&title, &now, &bookId],
+    )?;
+    if updated == 0 {
+        return Err(AppError::NotFound(format!("书籍 {} 不存在", bookId)));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn list_books() -> Result<Vec<Book>, AppError> {
     let conn = db::get_db()?;
@@ -448,4 +486,99 @@ pub fn update_chapter(req: UpdateChapterRequest) -> Result<DocNode, AppError> {
     } // drop conn before re-acquiring the global lock
 
     get_chapter_content(req.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 插入一本书 + 一卷，返回 (book_id, volume_id)。updated_at 用固定旧时间，便于断言更新。
+    fn setup_book_with_volume() -> (String, String) {
+        crate::db::init_test_db().unwrap();
+        let book_id = Uuid::new_v4().to_string();
+        let volume_id = Uuid::new_v4().to_string();
+        let old_ts = "2020-01-01T00:00:00+00:00";
+        let conn = db::get_db().unwrap();
+        conn.execute(
+            "INSERT INTO book (id, title, author, description, ai_description, created_at, updated_at)
+             VALUES (?1, ?2, '', '', '', ?3, ?3)",
+            params![&book_id, "旧书名", old_ts],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO volume (id, book_id, title, number, summary, created_at)
+             VALUES (?1, ?2, ?3, 1, '', ?4)",
+            params![&volume_id, &book_id, "旧卷名", old_ts],
+        )
+        .unwrap();
+        (book_id, volume_id)
+    }
+
+    #[test]
+    fn rename_volume_success() {
+        let (_book_id, volume_id) = setup_book_with_volume();
+        rename_volume(volume_id.clone(), "新卷名".to_string()).unwrap();
+
+        let conn = db::get_db().unwrap();
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM volume WHERE id = ?1",
+                [&volume_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "新卷名");
+    }
+
+    #[test]
+    fn rename_volume_rejects_empty_title() {
+        let (_book_id, volume_id) = setup_book_with_volume();
+        let err = rename_volume(volume_id.clone(), "   ".to_string()).unwrap_err();
+        assert!(matches!(err, AppError::Other(_)));
+
+        // 标题应保持不变
+        let conn = db::get_db().unwrap();
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM volume WHERE id = ?1",
+                [&volume_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "旧卷名");
+    }
+
+    #[test]
+    fn rename_book_success() {
+        let (book_id, _volume_id) = setup_book_with_volume();
+        rename_book(book_id.clone(), "新书名".to_string()).unwrap();
+
+        let conn = db::get_db().unwrap();
+        let (title, updated_at): (String, String) = conn
+            .query_row(
+                "SELECT title, updated_at FROM book WHERE id = ?1",
+                [&book_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(title, "新书名");
+        assert_ne!(updated_at, "2020-01-01T00:00:00+00:00");
+    }
+
+    #[test]
+    fn rename_book_rejects_empty_title() {
+        let (book_id, _volume_id) = setup_book_with_volume();
+        let err = rename_book(book_id.clone(), "".to_string()).unwrap_err();
+        assert!(matches!(err, AppError::Other(_)));
+
+        let conn = db::get_db().unwrap();
+        let title: String = conn
+            .query_row(
+                "SELECT title FROM book WHERE id = ?1",
+                [&book_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(title, "旧书名");
+    }
 }

@@ -88,6 +88,8 @@ pub fn run() {
             commands::book::update_chapter,
             commands::book::move_volume,
             commands::book::move_chapter,
+            commands::book::rename_volume,
+            commands::book::rename_book,
             commands::material::import_material,
             commands::material::list_materials,
             commands::material::get_material_by_id,

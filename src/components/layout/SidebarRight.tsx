@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   Bot,
   Search,
-  Settings,
   LayoutTemplate,
   UserRound,
   MapPin,
@@ -26,7 +25,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore, type RightPanelTab } from "@/stores/uiStore";
-import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { SceneTemplatePanel } from "@/components/templates/SceneTemplatePanel";
 import { CharacterPanel } from "@/components/characters/CharacterPanel";
 import { ScenePanel } from "@/components/scenes/ScenePanel";
@@ -54,7 +52,6 @@ const tabs: { id: RightPanelTab; label: string; icon: LucideIcon }[] = [
   { id: "scene", label: "场景", icon: MapPin },
   { id: "anchor", label: "锚点", icon: Anchor },
   { id: "styleProfile", label: "风格", icon: Palette },
-  { id: "settings", label: "设置", icon: Settings },
 ];
 
 function AIPanel() {
@@ -1224,7 +1221,7 @@ export function SidebarRight() {
         {rightPanelTab === "scene" && <ScenePanel />}
         {rightPanelTab === "anchor" && <AnchorPanel />}
         {rightPanelTab === "styleProfile" && <StyleProfilePanel />}
-        {rightPanelTab === "settings" && <SettingsPanel />}
+        {/* 设置已移出侧栏，由顶栏齿轮打开全屏设置页 */}
       </div>
     </div>
   );
