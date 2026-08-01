@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-07-31
 
 ### Added — UI/UX 全面重设计（沉浸写作风）
 - New visual identity: warm paper-and-ink palette with an amber accent color, in both dark and light themes; missing design tokens (`--accent`, `--destructive`, `--popover`, `--border`) added; editor selection, links, quote bars, generation highlight, scrollbars and resizers all use the accent color.

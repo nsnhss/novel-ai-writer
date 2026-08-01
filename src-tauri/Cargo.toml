@@ -1,6 +1,6 @@
 [package]
 name = "novel-ai-writer"
-version = "0.2.0"
+version = "1.0.0"
 description = "AI 小说写作软件 — 本地桌面端创作工具"
 authors = ["you"]
 edition = "2021"
