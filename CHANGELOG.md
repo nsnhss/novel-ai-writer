@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — UI/UX 全面重设计（沉浸写作风）
+- New visual identity: warm paper-and-ink palette with an amber accent color, in both dark and light themes; missing design tokens (`--accent`, `--destructive`, `--popover`, `--border`) added; editor selection, links, quote bars, generation highlight, scrollbars and resizers all use the accent color.
+- Lightweight component layer (`src/components/ui/`): button, input, textarea, dialog, dropdown-menu, context-menu, tabs, tooltip, slider-row, badge, separator — built on already-installed Radix packages with zero new UI runtime dependencies.
+- Promise-based `confirmDialog` / `promptDialog` replace all remaining native `window.confirm` / `window.prompt` calls (deletions, generation rejection, book/volume/chapter creation, API keys, rewrite instructions).
+- Minimal TitleBar: book switcher dropdown + volume/chapter breadcrumb on the left; privacy toggle, theme switch, sidebar toggles and settings entry on the right. The old read-only editor header was removed.
+- Settings moved out of the right sidebar into a fullscreen settings page (left group nav + content area), with new appearance options: editor font size / line height / content width.
+- Directory tree overhaul: right-click context menus, inline rename for books/volumes/chapters (double-click or menu; new `rename_book` / `rename_volume` backend commands), drag-and-drop reordering via dnd-kit, persisted volume expand/collapse state, and a keyboard-accessible "more" menu per row.
+- AI panel slimmed down: primary actions (continue / branch / outline / accept / reject) pinned to the top, generation params and style sliders collapsed into accordions (state persisted), generation history moved to its own segment; the 1200-line monolith was split into `src/components/ai/panel/` modules.
+- Editor empty state: shows guidance instead of an endless "loading chapter…" spinner when no chapter is selected.
+- UI state persistence (zustand persist): sidebar widths/collapse, active right-panel tab, volume expand state, AI panel accordions, editor typography.
+- All right-sidebar panels are now keep-alive (no state loss when switching tabs).
+- Star rating for generations is now shared and remembered across the editor toolbar, AI panel and rewrite dialog.
+
+### Changed
+- Ctrl+Enter continue generation now goes through the same accept/reject flow as the button (previously committed directly to the document).
+- Closing the rewrite diff dialog with generated content asks for confirmation before discarding.
+- Esc hierarchy: closes settings page first, then the right sidebar.
+
+### Fixed
+- Added missing TooltipProvider (would crash the app at startup when tooltips are used).
+
 ### Added
 - Tauri auto-updater integration with Ed25519-signed packages.
 - Multi-platform bundle targets: MSI, NSIS (Windows), DMG / App (macOS), AppImage, DEB, RPM (Linux).
