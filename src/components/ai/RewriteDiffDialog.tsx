@@ -8,6 +8,7 @@ import { useGenerationStore } from "@/stores/generationStore";
 import { useGenerationHistoryStore } from "@/stores/generationHistoryStore";
 import { useAppConfigStore } from "@/stores/appConfigStore";
 import { getEditorRef } from "@/lib/editorRef";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 export function RewriteDiffDialog() {
   const { currentBookId, currentChapterId, currentDocNode } = useBookStore();
@@ -151,8 +152,22 @@ export function RewriteDiffDialog() {
     }
   };
 
+  /** 用户主动关闭（X / Esc / 遮罩）：有生成结果时二次确认，防误拒 */
+  const handleCloseIntent = async () => {
+    if (generatedText.trim()) {
+      const ok = await confirmDialog({
+        title: "放弃改写结果？",
+        description: "关闭将丢弃本次 AI 改写结果。",
+        confirmText: "放弃",
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    await handleReject();
+  };
+
   return (
-    <Dialog.Root open={rewriteOpen} onOpenChange={(open) => !open && handleReject()}>
+    <Dialog.Root open={rewriteOpen} onOpenChange={(open) => { if (!open) void handleCloseIntent(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[80vh] w-[90vw] max-w-4xl -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-panel-border bg-panel shadow-xl outline-none">

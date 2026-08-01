@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Search,
   FileUp,
@@ -461,8 +462,14 @@ export function MaterialPanel() {
                           </button>
                         )}
                         <button
-                          onClick={() => {
-                            if (window.confirm("确定删除该素材？此操作不可撤销。")) deleteMaterial(material.id);
+                          onClick={async () => {
+                            const ok = await confirmDialog({
+                              title: "删除该素材？",
+                              description: "此操作不可撤销。",
+                              confirmText: "删除",
+                              danger: true,
+                            });
+                            if (ok) deleteMaterial(material.id);
                           }}
                           className="rounded p-1 text-red-500 hover:bg-muted"
                           title="删除"

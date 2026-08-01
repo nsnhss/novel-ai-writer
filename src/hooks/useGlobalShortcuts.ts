@@ -4,6 +4,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useGenerationStore } from "@/stores/generationStore";
 import { useShortcutStore, matchesShortcut, type ShortcutAction } from "@/stores/shortcutStore";
 import { getEditorRef } from "@/lib/editorRef";
+import { promptDialog } from "@/components/ui/prompt-dialog";
 
 function isInputElement(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -18,7 +19,7 @@ function isInputElement(target: EventTarget | null): boolean {
 
 export function useGlobalShortcuts() {
   const { currentBookId, currentChapterId } = useBookStore();
-  const { rightSidebarCollapsed, toggleRightSidebar } = useUIStore();
+  const { rightSidebarCollapsed, toggleRightSidebar, settingsOpen, setSettingsOpen } = useUIStore();
   const { startContinue, reset, params, openRewriteDialog } = useGenerationStore();
   const { shortcuts } = useShortcutStore();
 
@@ -69,7 +70,8 @@ export function useGlobalShortcuts() {
               onToken: (token) => editor.appendGenerationToken(token),
               onUsage: () => {},
               onError: () => editor.finishGeneration(),
-              onDone: () => editor.commitGeneration(),
+              // 与按钮续写行为一致：结束后保留高亮待接受，由用户决定接受/拒绝
+              onDone: () => editor.finishGeneration(),
             }
           );
           break;
@@ -78,15 +80,22 @@ export function useGlobalShortcuts() {
           const range = editor.getSelectionRange();
           if (!range || range.text.length === 0) return;
           if (!currentBookId || !currentChapterId) return;
-          const instruction = window.prompt("改写要求：", "保持原意，换一种表达方式") || "";
-          if (!instruction.trim()) return;
-          reset();
-          openRewriteDialog({
-            originalText: range.text,
-            from: range.from,
-            to: range.to,
-            instruction,
-          });
+          // 应用内输入对话框替代原生 prompt（异步，不阻塞快捷键处理）
+          void (async () => {
+            const instruction = await promptDialog({
+              title: "改写要求",
+              defaultValue: "保持原意，换一种表达方式",
+              placeholder: "请输入改写要求",
+            });
+            if (!instruction?.trim()) return;
+            reset();
+            openRewriteDialog({
+              originalText: range.text,
+              from: range.from,
+              to: range.to,
+              instruction: instruction.trim(),
+            });
+          })();
           break;
         }
         case "undo":
@@ -99,7 +108,10 @@ export function useGlobalShortcuts() {
           editor.openSearch();
           break;
         case "close_panel":
-          if (!rightSidebarCollapsed) {
+          // Esc 层级：先关设置页，再关右侧栏（对话框由 Radix 自行处理 Esc）
+          if (settingsOpen) {
+            setSettingsOpen(false);
+          } else if (!rightSidebarCollapsed) {
             toggleRightSidebar();
           }
           break;
@@ -112,6 +124,8 @@ export function useGlobalShortcuts() {
     currentBookId,
     currentChapterId,
     rightSidebarCollapsed,
+    settingsOpen,
+    setSettingsOpen,
     shortcuts,
     startContinue,
     toggleRightSidebar,

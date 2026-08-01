@@ -2,13 +2,8 @@ import { useState } from "react";
 import { Check, X, Edit3, RefreshCw, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGenerationStore } from "@/stores/generationStore";
-
-const RATING_KEY = "novelWriter:lastRating";
-
-function loadLastRating(): number {
-  const v = Number(localStorage.getItem(RATING_KEY));
-  return v >= 1 && v <= 5 ? v : 3;
-}
+import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { loadLastRating, saveLastRating } from "@/lib/rating";
 
 export function GenerationToolbar() {
   const {
@@ -19,11 +14,11 @@ export function GenerationToolbar() {
     regenerate,
     openRewriteForSelection,
   } = useGenerationStore();
-  // 记住上次评分，避免每次生成都重置为 3 星
+  // 记住上次评分（与 AIPanel/改写对话框共用同一份），避免每次生成都重置为 3 星
   const [rating, setRatingState] = useState(loadLastRating);
   const setRating = (star: number) => {
     setRatingState(star);
-    localStorage.setItem(RATING_KEY, String(star));
+    saveLastRating(star);
   };
   const [copied, setCopied] = useState(false);
 
@@ -65,9 +60,15 @@ export function GenerationToolbar() {
       </button>
 
       <button
-        onClick={() => {
+        onClick={async () => {
           // 拒绝会移除已生成文本且不可恢复，二次确认防误点
-          if (window.confirm("确定拒绝此次生成？已生成内容将被移除。")) rejectGeneration(rating);
+          const ok = await confirmDialog({
+            title: "拒绝此次生成？",
+            description: "已生成内容将被移除，此操作不可恢复。",
+            confirmText: "拒绝",
+            danger: true,
+          });
+          if (ok) rejectGeneration(rating);
         }}
         disabled={isGenerating}
         className="flex items-center gap-1 rounded bg-red-600/90 px-2 py-1 text-xs text-white hover:bg-red-700 disabled:opacity-50"

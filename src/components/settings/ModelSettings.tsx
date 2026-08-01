@@ -3,6 +3,7 @@ import { Plus, Loader2, Trash2, Edit2, Key, Wifi, Eye, EyeOff, Sparkles, Star, C
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useModelStore, type AiModel, type CreateModelRequest, type ModelRecommendation } from "@/stores/modelStore";
+import { promptDialog } from "@/components/ui/prompt-dialog";
 
 const PROVIDER_OPTIONS = [
   { value: "ollama", label: "Ollama（本地，无需 API Key）" },
@@ -317,12 +318,12 @@ export function ModelSettings() {
 
   const handleApplyRecommendation = async (rec: ModelRecommendation) => {
     if (rec.provider === "openai_compatible") {
-      const key = window.prompt(`请输入 ${rec.name} 的 API Key:`);
+      const key = await promptDialog({
+        title: `请输入 ${rec.name} 的 API Key`,
+        placeholder: "API Key",
+        validate: (v) => (v.trim() ? null : "API Key 不能为空"),
+      });
       if (key === null) return;
-      if (!key.trim()) {
-        toast.error("API Key 不能为空");
-        return;
-      }
       try {
         await applyRecommendation(rec, key.trim());
       } catch (err) {
