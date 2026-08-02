@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "identifier": "com.a.novel-ai-writer",
   "build": {
-    "beforeDevCommand": "cmd /c npm run dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "cmd /c npm run build",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
