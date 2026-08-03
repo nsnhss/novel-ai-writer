@@ -54,9 +54,7 @@
     "macOS": {
       "minimumSystemVersion": "11.0",
       "frameworks": [],
-
-      "signingIdentity": "",
-      "entitlements": "",
+      "signingIdentity": "-",
       "dmg": {
         "appPosition": { "x": 180, "y": 170 },
         "applicationFolderPosition": { "x": 430, "y": 170 },
