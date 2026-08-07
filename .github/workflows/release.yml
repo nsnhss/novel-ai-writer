@@ -118,10 +118,10 @@ jobs:
 
           # Map Tauri updater target names to (archive pattern, signature suffix)
           $targetMap = @{
-            "windows-x86_64" = @("*x64-setup.exe", ".exe.sig")
+            "windows-x86_64" = @("*x64-setup.exe", ".sig")
             "darwin-x86_64"  = @("*_x64.app.tar.gz", ".sig")
             "darwin-aarch64" = @("*_aarch64.app.tar.gz", ".sig")
-            "linux-x86_64"   = @("*_amd64.AppImage", ".AppImage.sig")
+            "linux-x86_64"   = @("*_amd64.AppImage", ".sig")
           }
 
           foreach ($entry in $targetMap.GetEnumerator()) {
@@ -133,7 +133,7 @@ jobs:
               $sigName = $archive.Name + $sigSuffix
               $sigFile = $assets | Where-Object { $_.Name -eq $sigName } | Select-Object -First 1
               $signature = if ($sigFile) { (Get-Content $sigFile.FullName -Raw).Trim() } else { "" }
-              $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${archive.Name}"
+              $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($archive.Name)"
               $platforms[$target] = @{
                 signature = $signature
                 url       = $url
