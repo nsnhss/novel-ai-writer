@@ -59,6 +59,13 @@ interface MaterialState {
     sourceTypeFilter?: string | null;
     tagFilter?: string | null;
   }) => Promise<{ content: string; fileName: string }>;
+  exportMaterialsEpub: (options: {
+    statusFilter?: string | null;
+    minRating?: number | null;
+    maxRating?: number | null;
+    sourceTypeFilter?: string | null;
+    tagFilter?: string | null;
+  }) => Promise<{ data: number[]; fileName: string }>;
   createTag: (name: string, category: string, color?: string) => Promise<void>;
   listTagCategories: () => Promise<string[]>;
   searchMaterials: (query: string, contentLevels?: string[]) => Promise<void>;
@@ -139,6 +146,19 @@ export const useMaterialStore = create<MaterialState>((set, get) => ({
     return invoke<{ content: string; fileName: string }>("export_materials", {
       req: {
         format: options.format,
+        statusFilter: options.statusFilter ?? null,
+        minRating: options.minRating ?? null,
+        maxRating: options.maxRating ?? null,
+        sourceTypeFilter: options.sourceTypeFilter ?? null,
+        tagFilter: options.tagFilter ?? null,
+      },
+    });
+  },
+
+  exportMaterialsEpub: async (options) => {
+    return invoke<{ data: number[]; fileName: string }>("export_materials_epub", {
+      req: {
+        format: "epub",
         statusFilter: options.statusFilter ?? null,
         minRating: options.minRating ?? null,
         maxRating: options.maxRating ?? null,

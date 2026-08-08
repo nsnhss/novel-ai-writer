@@ -791,6 +791,76 @@ pub fn export_materials(req: ExportMaterialsRequest) -> Result<ExportMaterialsRe
     Ok(ExportMaterialsResult { content, file_name })
 }
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBinaryResult {
+    pub data: Vec<u8>,
+    pub file_name: String,
+}
+
+fn escape_xml(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// 导出素材为 EPUB 电子书（需求文档 F-24）。
+#[tauri::command]
+pub fn export_materials_epub(req: ExportMaterialsRequest) -> Result<ExportBinaryResult, AppError> {
+    use epub_builder::{EpubBuilder, EpubContent, ReferenceType, ZipLibrary};
+
+    let materials = fetch_materials_for_export(&req)?;
+    if materials.is_empty() {
+        return Err(AppError::Other("没有可导出的素材".to_string()));
+    }
+
+    let to_err = |e: epub_builder::Error| AppError::Other(format!("生成 EPUB 失败: {}", e));
+
+    let zip = ZipLibrary::new().map_err(to_err)?;
+    let mut builder = EpubBuilder::new(zip).map_err(to_err)?;
+    builder
+        .metadata("title", "素材导出")
+        .map_err(to_err)?
+        .metadata("author", "novel-ai-writer")
+        .map_err(to_err)?
+        .metadata("lang", "zh-CN")
+        .map_err(to_err)?;
+
+    for (i, m) in materials.iter().enumerate() {
+        let paragraphs = m
+            .plain_text
+            .lines()
+            .map(|line| format!("<p>{}</p>", escape_xml(line)))
+            .collect::<String>();
+        let xhtml = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+             <html xmlns=\"http://www.w3.org/1999/xhtml\">\
+             <head><title>{}</title></head><body>{}</body></html>",
+            escape_xml(&m.source_name),
+            paragraphs
+        );
+        builder
+            .add_content(
+                EpubContent::new(format!("material_{}.xhtml", i), xhtml.as_bytes())
+                    .title(m.source_name.as_str())
+                    .reftype(ReferenceType::Text),
+            )
+            .map_err(to_err)?;
+    }
+
+    let mut buf: Vec<u8> = Vec::new();
+    builder.generate(&mut buf).map_err(to_err)?;
+
+    Ok(ExportBinaryResult {
+        data: buf,
+        file_name: format!(
+            "materials_export_{}.epub",
+            Utc::now().format("%Y%m%d_%H%M%S")
+        ),
+    })
+}
+
 #[tauri::command]
 pub fn delete_tag(id: String) -> Result<(), AppError> {
     let conn = db::get_db()?;
@@ -970,4 +1040,67 @@ pub async fn batch_delete_materials(
         vector_store.remove_from_cache_by_material(id).await;
     }
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 插入一条素材，返回 material_id。
+    fn setup_material() -> String {
+        crate::db::init_test_db().unwrap();
+        let id = Uuid::new_v4().to_string();
+        let conn = db::get_db().unwrap();
+        conn.execute(
+            "INSERT INTO material (
+                id, source_name, source_type, content, plain_text, content_level,
+                rating, status, is_negative, style_fingerprint, hit_count, last_hit_at, created_at, updated_at
+            ) VALUES (?1, ?2, 'imported', ?3, ?3, 'general', 4, 'active', 0, '{}', 0, NULL,
+                      '2020-01-01T00:00:00+00:00', '2020-01-01T00:00:00+00:00')",
+            params![&id, "测试素材", "第一行\n第二行 <tag> & \"引号\""],
+        )
+        .unwrap();
+        id
+    }
+
+    fn empty_request(format: &str) -> ExportMaterialsRequest {
+        ExportMaterialsRequest {
+            format: format.to_string(),
+            status_filter: None,
+            min_rating: None,
+            max_rating: None,
+            source_type_filter: None,
+            tag_filter: None,
+        }
+    }
+
+    #[test]
+    fn export_materials_txt() {
+        setup_material();
+        let result = export_materials(empty_request("txt")).unwrap();
+        assert!(result.file_name.ends_with(".txt"));
+        assert!(result.content.contains("测试素材"));
+        assert!(result.content.contains("第一行"));
+    }
+
+    #[test]
+    fn export_materials_epub_produces_zip() {
+        setup_material();
+        let result = export_materials_epub(empty_request("epub")).unwrap();
+        assert!(result.file_name.ends_with(".epub"));
+        // EPUB 即 ZIP 包，魔数 PK\x03\x04
+        assert!(result.data.len() > 100);
+        assert_eq!(&result.data[..2], b"PK");
+        let text = String::from_utf8_lossy(&result.data).into_owned();
+        // ZIP 中央目录包含素材 xhtml 条目
+        assert!(text.contains("material_0.xhtml"));
+    }
+
+    #[test]
+    fn export_materials_epub_rejects_empty() {
+        crate::db::init_test_db().unwrap();
+        let err = export_materials_epub(empty_request("epub")).unwrap_err();
+        assert!(matches!(err, AppError::Other(_)));
+    }
 }

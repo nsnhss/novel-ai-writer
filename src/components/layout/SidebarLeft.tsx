@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ChevronRight, ChevronDown, FileText, Folder, Plus, BookOpen, Loader2, AlertTriangle,
   FolderPlus, ChevronsUpDown, MoreHorizontal, GripVertical, Check, Pencil, ArrowUp, ArrowDown, Trash2,
+  Download,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -21,6 +22,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { promptDialog } from "@/components/ui/prompt-dialog";
+import { toast } from "@/lib/toast";
+import { downloadText } from "@/lib/download";
 
 /** 当前处于行内重命名状态的节点 */
 type RenameTarget = { kind: "volume" | "chapter"; id: string } | null;
@@ -406,7 +409,7 @@ export function SidebarLeft() {
   const {
     loadBooks, loadBookTree, loadChapter, createBook, createVolume, createChapter,
     deleteVolume, deleteChapter, deleteBook, moveVolume, moveChapter, clearError,
-    renameChapter, renameVolume, renameBook,
+    renameChapter, renameVolume, renameBook, exportBook,
   } = useBookStore(
     useShallow((s) => ({
       loadBooks: s.loadBooks,
@@ -424,6 +427,7 @@ export function SidebarLeft() {
       renameChapter: s.renameChapter,
       renameVolume: s.renameVolume,
       renameBook: s.renameBook,
+      exportBook: s.exportBook,
     }))
   );
 
@@ -463,6 +467,17 @@ export function SidebarLeft() {
     });
     if (title?.trim() && title.trim() !== currentBook.title) {
       await renameBook(currentBook.id, title.trim());
+    }
+  };
+
+  const handleExportBook = async (format: "md" | "txt") => {
+    if (!currentBook) return;
+    try {
+      const { content, fileName } = await exportBook(currentBook.id, format);
+      downloadText(content, fileName, format === "md" ? "text/markdown" : "text/plain");
+      toast.success(`已导出「${currentBook.title}」`);
+    } catch (err) {
+      toast.error(`导出失败: ${err}`);
     }
   };
 
@@ -621,6 +636,12 @@ export function SidebarLeft() {
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={handleRenameBook} disabled={!currentBook}>
               <Pencil size={14} className="mr-2" />重命名本书
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleExportBook("md")} disabled={!currentBook}>
+              <Download size={14} className="mr-2" />导出本书（Markdown）
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => handleExportBook("txt")} disabled={!currentBook}>
+              <Download size={14} className="mr-2" />导出本书（TXT）
             </DropdownMenuItem>
             <DropdownMenuItem danger onSelect={handleDeleteBook} disabled={!currentBook}>
               <Trash2 size={14} className="mr-2" />删除本书

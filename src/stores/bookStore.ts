@@ -76,6 +76,7 @@ interface BookState {
   loadChapter: (chapterId: string) => Promise<void>;
   saveChapter: (chapterId: string, title?: string, contentMarkdown?: string, plainText?: string) => Promise<void>;
   deleteBook: (bookId: string) => Promise<void>;
+  exportBook: (bookId: string, format: "md" | "txt") => Promise<{ content: string; fileName: string }>;
   clearError: () => void;
 }
 
@@ -89,6 +90,10 @@ export const useBookStore = create<BookState>((set, get) => ({
   error: null,
 
   clearError: () => set({ error: null }),
+
+  exportBook: async (bookId, format) => {
+    return invoke<{ content: string; fileName: string }>("export_book", { bookId, format });
+  },
 
   deleteBook: async (bookId) => {
     set({ error: null });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "@/lib/toast";
+import { downloadBinary, downloadText } from "@/lib/download";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Search,
@@ -38,6 +39,7 @@ export function MaterialPanel() {
     loadTags,
     importMaterial,
     exportMaterials,
+    exportMaterialsEpub,
     updateMaterial,
     activateMaterial,
     archiveMaterial,
@@ -81,21 +83,20 @@ export function MaterialPanel() {
     loadMaterials({ tagFilter: selectedTagId || null });
   }, [selectedTagId, loadMaterials]);
 
-  const handleExport = async (format: "json" | "txt") => {
+  const handleExport = async (format: "json" | "txt" | "epub") => {
     try {
-      const { content, fileName } = await exportMaterials({
-        format,
-        tagFilter: selectedTagId || null,
-      });
-      const blob = new Blob([content], { type: format === "json" ? "application/json" : "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      if (format === "epub") {
+        const { data, fileName } = await exportMaterialsEpub({
+          tagFilter: selectedTagId || null,
+        });
+        downloadBinary(data, fileName, "application/epub+zip");
+      } else {
+        const { content, fileName } = await exportMaterials({
+          format,
+          tagFilter: selectedTagId || null,
+        });
+        downloadText(content, fileName, format === "json" ? "application/json" : "text/plain");
+      }
     } catch (err) {
       toast.error(`导出失败: ${err}`);
     }
@@ -287,6 +288,12 @@ export function MaterialPanel() {
             className="flex items-center gap-1 rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <Download size={12} /> JSON
+          </button>
+          <button
+            onClick={() => handleExport("epub")}
+            className="flex items-center gap-1 rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Download size={12} /> EPUB
           </button>
           <button
             onClick={() => handleExport("txt")}

@@ -72,8 +72,8 @@ pub struct Budget {
 impl Default for Budget {
     fn default() -> Self {
         Self {
-            // 风格画像合在系统指令里，与需求文档 §3.6 对齐
-            system_prompt: 1200,
+            // 风格画像合在系统指令里，与需求文档 §3.6 对齐（合计 6000）
+            system_prompt: 800,
             style_profile: 0,
             anchors: 300,
             character_scene_cards: 600,

@@ -48,3 +48,5 @@ test-data-empty/
 
 # Windows temp files
 *.tmp
+
+*.tsbuildinfo

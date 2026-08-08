@@ -488,6 +488,104 @@ pub fn update_chapter(req: UpdateChapterRequest) -> Result<DocNode, AppError> {
     get_chapter_content(req.id)
 }
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBookResult {
+    pub content: String,
+    pub file_name: String,
+}
+
+/// 导出整本书为 Markdown 或 TXT（需求文档 §2.2 用户旅程：导出完本）。
+#[allow(non_snake_case)]
+#[tauri::command]
+pub fn export_book(bookId: String, format: String) -> Result<ExportBookResult, AppError> {
+    let is_md = format == "md";
+    if !is_md && format != "txt" {
+        return Err(AppError::Other(format!("不支持的导出格式: {}", format)));
+    }
+
+    let conn = db::get_db()?;
+    let (title, author): (String, String) = conn
+        .query_row(
+            "SELECT title, author FROM book WHERE id = ?1",
+            [&bookId],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .ok_or_else(|| AppError::NotFound(format!("书籍 {} 不存在", bookId)))?;
+
+    let volumes: Vec<(String, String)> = {
+        let mut stmt =
+            conn.prepare("SELECT id, title FROM volume WHERE book_id = ?1 ORDER BY number")?;
+        let rows = stmt
+            .query_map([&bookId], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows
+    };
+
+    let mut out = String::new();
+    if is_md {
+        out.push_str(&format!("# {}\n\n", title));
+        if !author.is_empty() {
+            out.push_str(&format!("> 作者：{}\n\n", author));
+        }
+    } else {
+        out.push_str(&title);
+        out.push('\n');
+        if !author.is_empty() {
+            out.push_str(&format!("作者：{}\n", author));
+        }
+        out.push('\n');
+    }
+
+    for (volume_id, volume_title) in volumes {
+        if is_md {
+            out.push_str(&format!("## {}\n\n", volume_title));
+        } else {
+            out.push_str(&format!("{}\n\n", volume_title));
+        }
+
+        let chapters: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, title FROM chapter WHERE volume_id = ?1 ORDER BY number")?;
+            let rows = stmt
+                .query_map([&volume_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+
+        for (chapter_id, chapter_title) in chapters {
+            let (content, plain_text): (String, String) = conn
+                .query_row(
+                    "SELECT content, plain_text FROM doc_node WHERE chapter_id = ?1
+                     ORDER BY version DESC LIMIT 1",
+                    [&chapter_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?
+                .unwrap_or_default();
+
+            if is_md {
+                out.push_str(&format!("### {}\n\n{}\n\n", chapter_title, content));
+            } else {
+                out.push_str(&format!("{}\n\n{}\n\n", chapter_title, plain_text));
+            }
+        }
+    }
+
+    // 文件名替换各平台非法字符
+    let safe_title: String = title
+        .chars()
+        .map(|c| if "\\/:*?\"<>|".contains(c) { '_' } else { c })
+        .collect();
+    let extension = if is_md { "md" } else { "txt" };
+
+    Ok(ExportBookResult {
+        content: out,
+        file_name: format!("{}.{}", safe_title, extension),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -563,6 +661,66 @@ mod tests {
             .unwrap();
         assert_eq!(title, "新书名");
         assert_ne!(updated_at, "2020-01-01T00:00:00+00:00");
+    }
+
+    /// 插入一本书 + 一卷 + 一章 + 正文，返回 book_id。
+    fn setup_book_with_content() -> String {
+        let (book_id, volume_id) = setup_book_with_volume();
+        let chapter_id = Uuid::new_v4().to_string();
+        let conn = db::get_db().unwrap();
+        conn.execute(
+            "INSERT INTO chapter (id, volume_id, title, number, summary, status, word_count, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, '', 'draft', 4, '2020-01-01T00:00:00+00:00', '2020-01-01T00:00:00+00:00')",
+            params![&chapter_id, &volume_id, "第一章 开始"],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO doc_node (id, chapter_id, content, plain_text, word_count, version, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, 4, 1, '2020-01-01T00:00:00+00:00', '2020-01-01T00:00:00+00:00')",
+            params![
+                format!("{}-doc", &chapter_id),
+                &chapter_id,
+                "**正文**内容",
+                "正文内容"
+            ],
+        )
+        .unwrap();
+        book_id
+    }
+
+    #[test]
+    fn export_book_markdown() {
+        let book_id = setup_book_with_content();
+        let result = export_book(book_id, "md".to_string()).unwrap();
+        assert!(result.file_name.ends_with(".md"));
+        assert!(result.content.contains("# 旧书名"));
+        assert!(result.content.contains("## 旧卷名"));
+        assert!(result.content.contains("### 第一章 开始"));
+        assert!(result.content.contains("**正文**内容"));
+    }
+
+    #[test]
+    fn export_book_txt_uses_plain_text() {
+        let book_id = setup_book_with_content();
+        let result = export_book(book_id, "txt".to_string()).unwrap();
+        assert!(result.file_name.ends_with(".txt"));
+        assert!(result.content.contains("旧书名"));
+        assert!(result.content.contains("正文内容"));
+        assert!(!result.content.contains("**正文**"));
+    }
+
+    #[test]
+    fn export_book_rejects_bad_format() {
+        let book_id = setup_book_with_content();
+        let err = export_book(book_id, "pdf".to_string()).unwrap_err();
+        assert!(matches!(err, AppError::Other(_)));
+    }
+
+    #[test]
+    fn export_book_not_found() {
+        crate::db::init_test_db().unwrap();
+        let err = export_book("no-such-book".to_string(), "md".to_string()).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
     }
 
     #[test]

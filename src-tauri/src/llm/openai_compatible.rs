@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
@@ -14,16 +14,61 @@ pub struct OpenAiCompatibleProvider {
     config: GenerationConfig,
 }
 
+/// 建立连接的超时时间（需求文档 §3.9：网络异常 30s 超时、重试 2 次）
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// 等待响应头的超时时间（流式响应 body 不计入）
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// 失败重试次数（不含首次尝试）
+const MAX_RETRIES: usize = 2;
+
 impl OpenAiCompatibleProvider {
     pub fn new(config: GenerationConfig) -> Self {
-        Self {
-            client: reqwest::Client::new(),
-            config,
+        let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { client, config }
+    }
+
+    fn build_request(&self, url: &str, body: &OpenAiChatRequest) -> reqwest::RequestBuilder {
+        let mut builder = self.client.post(url).json(body);
+        if let Some(ref key) = self.config.api_key {
+            builder = builder.header("Authorization", format!("Bearer {}", key));
         }
+        builder
+    }
+
+    /// 发送请求并等待响应头：30s 超时，连接/超时类失败重试 2 次。
+    async fn send_with_retry(
+        &self,
+        url: &str,
+        body: &OpenAiChatRequest,
+    ) -> Result<reqwest::Response, AppError> {
+        let mut last_err = String::new();
+        for attempt in 0..=MAX_RETRIES {
+            if attempt > 0 {
+                tracing::warn!("API 请求失败，进行第 {} 次重试", attempt);
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            match tokio::time::timeout(REQUEST_TIMEOUT, self.build_request(url, body).send()).await
+            {
+                Ok(Ok(response)) => return Ok(response),
+                Ok(Err(e)) => {
+                    last_err = format!("API 请求失败: {}", e);
+                }
+                Err(_) => {
+                    last_err = format!("API 请求超时（{} 秒无响应）", REQUEST_TIMEOUT.as_secs());
+                }
+            }
+        }
+        Err(AppError::Other(format!(
+            "{}（已重试 {} 次）",
+            last_err, MAX_RETRIES
+        )))
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 struct OpenAiChatRequest {
     model: String,
     messages: Vec<OpenAiMessage>,
@@ -34,7 +79,7 @@ struct OpenAiChatRequest {
     frequency_penalty: Option<f32>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAiMessage {
     role: String,
     content: String,
@@ -105,19 +150,11 @@ impl GenerationProvider for OpenAiCompatibleProvider {
             frequency_penalty: request.frequency_penalty.or(self.config.frequency_penalty),
         };
 
-        let mut builder = self.client.post(&url).json(&body);
-        if let Some(ref key) = self.config.api_key {
-            builder = builder.header("Authorization", format!("Bearer {}", key));
-        }
-
         if cancel_token.is_cancelled() {
             return Ok(());
         }
 
-        let response = builder
-            .send()
-            .await
-            .map_err(|e| AppError::Other(format!("API 请求失败: {}", e)))?;
+        let response = self.send_with_retry(&url, &body).await?;
 
         if !response.status().is_success() {
             let text = response
@@ -234,15 +271,7 @@ impl GenerationProvider for OpenAiCompatibleProvider {
             frequency_penalty: request.frequency_penalty.or(self.config.frequency_penalty),
         };
 
-        let mut builder = self.client.post(&url).json(&body);
-        if let Some(ref key) = self.config.api_key {
-            builder = builder.header("Authorization", format!("Bearer {}", key));
-        }
-
-        let response = builder
-            .send()
-            .await
-            .map_err(|e| AppError::Other(format!("API 请求失败: {}", e)))?;
+        let response = self.send_with_retry(&url, &body).await?;
 
         if !response.status().is_success() {
             let text = response
